@@ -28,6 +28,7 @@ It is designed to keep project context organized, concise, and ready to use.
 
 ## Quick Links
 - [Detailed Features List](docs/FEATURES.md)
+- [Development Roadmap](docs/ROADMAP.md)
 - [Contributing & Building from Source](CONTRIBUTING.md)
 
 ---
@@ -68,49 +69,6 @@ ProjectContextCopier-Windows.exe
 
 - Windows 10/11
 - Python 3.10+
-
----
-
-# Roadmap
-
-## v0.1
-
-- Project loading
-- Compression
-- Skeleton generation
-- Git Diff
-- Mermaid graphs
-- LAN sharing
-
----
-
-## v0.2
-
-- Search improvements
-- More presets
-- Better statistics
-
----
-
-## v0.3
-
-- Plugin system
-- Custom exporters
-
----
-
-## v0.5
-
-- Multi-language parsing
-- Better UI animations
-
----
-
-## v1.0
-
-- Stable release
-- Automatic updates
-- Plugin marketplace
 
 ---
 
