@@ -50,7 +50,7 @@ Main application views:
 
 ## Download
 
-Download the latest executable from the [GitHub Releases page](releases).
+Download the latest executable from the [GitHub Releases page](https://github.com/parmarth-kumar/project-context-copier/releases/latest).
 
 No Python installation is required.
 
