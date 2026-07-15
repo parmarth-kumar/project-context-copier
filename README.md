@@ -87,4 +87,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 # Author
 
-Developed by Parth
+Developed by Parmarth
