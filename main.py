@@ -1,7 +1,7 @@
 import os
 import sys
 import tkinter as tk
-from ui.app import FileCopierApp
+from ui.app import ProjectContextCopierApp
 
 try:
     from tkinterdnd2 import TkinterDnD
@@ -15,7 +15,7 @@ def main():
         try:
             # Tell Windows this is an independent app, not just 'python.exe'
             # Use v3 to bypass Windows taskbar icon cache from the previous run
-            myappid = 'mycompany.fileclipboardcopier.v3'
+            myappid = 'mycompany.projectcontextcopier.v3'
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         except Exception as e:
             print(f"Could not set AppUserModelID: {e}")
@@ -48,7 +48,7 @@ def main():
     except Exception as e:
         print(f"Warning: Could not set application icon: {e}")
         
-    FileCopierApp(root)
+    ProjectContextCopierApp(root)
     root.mainloop()
 
 if __name__ == "__main__":

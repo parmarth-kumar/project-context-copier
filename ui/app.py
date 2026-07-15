@@ -98,7 +98,7 @@ class ShareServer:
             self.server.shutdown()
 
 
-class FileCopierApp:
+class ProjectContextCopierApp:
     def __init__(self, root):
 
         from types import SimpleNamespace
