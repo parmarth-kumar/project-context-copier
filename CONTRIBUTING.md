@@ -20,6 +20,18 @@ Run
 python main.py
 ```
 
+Build Executable
+
+```bash
+pyinstaller ^
+--onefile ^
+--windowed ^
+--add-data "assets;assets" ^
+--icon assets/icon.ico ^
+--name ProjectContextCopier ^
+main.py
+```
+
 ---
 
 # Contributing
