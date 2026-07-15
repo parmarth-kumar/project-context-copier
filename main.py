@@ -15,7 +15,7 @@ def main():
         try:
             # Tell Windows this is an independent app, not just 'python.exe'
             # Use v3 to bypass Windows taskbar icon cache from the previous run
-            myappid = 'mycompany.projectcontextcopier.v3'
+            myappid = 'com.parmarth.projectcontextcopier'
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         except Exception as e:
             print(f"Could not set AppUserModelID: {e}")

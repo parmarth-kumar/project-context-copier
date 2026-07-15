@@ -1,6 +1,6 @@
 # Project Context Copier
 
-> Build, compress, and copy project context in a clean, shareable format.
+> Prepare your codebase for AI assistants in one click.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)  ![Platform](https://img.shields.io/badge/Platform-Windows-success.svg)  ![License](https://img.shields.io/badge/License-MIT-green.svg)  ![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)
 
