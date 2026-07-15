@@ -1,5 +1,7 @@
 # Features
 
+Project Context Copier provides a robust set of tools for tailoring the generated context to your exact needs. Below is a detailed breakdown of its capabilities.
+
 ## Project Loading
 
 - Load entire folders

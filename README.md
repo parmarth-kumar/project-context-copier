@@ -8,33 +8,45 @@
 
 ## Overview
 
-Project Context Copier is a desktop utility that prepares source code for sharing, review, and faster handoff.
+Project Context Copier packages an entire codebase into a clean, AI-ready context.
 
-Instead of manually copying dozens of files, the application automatically:
+Instead of manually selecting files, removing secrets, trimming comments, and organizing code for sharing, Project Context Copier automates the entire workflow in one click.
 
-- Loads an entire project
-- Filters unnecessary files
-- Removes comments
-- Generates compact skeletons
-- Creates Mermaid project graphs
-- Includes Git changes
-- Packages everything into one optimized context
-- Copies directly to your clipboard
-
-It is designed to keep project context organized, concise, and ready to use.
+Whether you're working with ChatGPT, Claude, GitHub Copilot, or another LLM, it helps you generate concise, structured project context that is easier to review, explain, and reason about.
 
 ---
 
+## Why Project Context Copier?
 
-## Quick Links
-- [Detailed Features List](docs/FEATURES.md)
-- [Changelog](CHANGELOG.md)
-- [Development Roadmap](docs/ROADMAP.md)
-- [Contributing & Building from Source](CONTRIBUTING.md)
+Preparing a project for AI assistants or code reviews usually means:
+
+- Selecting relevant files
+- Removing unnecessary folders
+- Cleaning comments
+- Reducing token usage
+- Sharing architecture
+- Including Git changes
+
+Project Context Copier automates this process and produces a single, structured context ready to copy, share, or analyze.
 
 ---
 
-# Screenshots
+## Features
+
+- 📁 Load complete projects or selected files
+- 🔍 Smart filtering with extension, folder and regex support
+- 📋 One-click clipboard packaging
+- 🧹 Comment and whitespace compression
+- 🦴 Skeleton generation
+- 📊 Mermaid project graphs
+- 🌿 Git Diff mode
+- 🌐 LAN sharing
+- 👀 Live preview
+- 🌙 Dark & Light themes
+
+---
+
+## Screenshots
 
 Main application views:
 
@@ -46,45 +58,59 @@ Main application views:
 
 ---
 
-# Installation
+## Installation
 
-## Download
+### Download
 
-Download the latest executable from the [GitHub Releases page](https://github.com/parmarth-kumar/project-context-copier/releases/latest).
+Download the latest Windows release from the
+[Releases](https://github.com/parmarth-kumar/project-context-copier/releases/latest)
+page.
+
+Download:
+
+- [`ProjectContextCopier-v0.1.0-alpha.zip`](https://github.com/parmarth-kumar/project-context-copier/releases/download/v0.1.0-alpha/ProjectContextCopier-v0.1.0-alpha.zip)
+
+### Run
+
+1. Extract the ZIP archive.
+2. Launch `ProjectContextCopier-Windows.exe`.
+3. If Windows SmartScreen appears, click **More info → Run anyway**.
+4. Start selecting projects and copy AI-ready context.
 
 No Python installation is required.
 
 ---
 
-## Run
+## Requirements
 
-Simply launch
-
-```
-ProjectContextCopier-Windows.exe
-```
+- Windows 10 or Windows 11
 
 ---
 
-# Requirements
+## Use Cases
 
-- Windows 10/11
-- Python 3.10+
-
----
-
-# Why this project?
-
-Project Context Copier automates context preparation by producing a clean, compact, and structured representation of your codebase.
+- Preparing repositories for ChatGPT or Claude
+- Sharing projects with teammates
+- Architecture discussions
+- Code reviews
+- Documentation generation
+- AI-assisted debugging
 
 ---
 
-# License
+## Quick Links
 
-This project is licensed under the [MIT License](LICENSE).
+- [Detailed Features List](docs/FEATURES.md)
+- [Changelog](CHANGELOG.md)
+- [Development Roadmap](docs/ROADMAP.md)
+- [Contributing & Building from Source](CONTRIBUTING.md)
 
 ---
 
-# Author
+## License
 
-Developed by Parmarth
+Licensed under the MIT License.
+
+## Author
+
+Developed by Parmarth Kumar Vidyarthi.

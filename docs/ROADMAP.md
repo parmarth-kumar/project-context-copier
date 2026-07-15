@@ -13,8 +13,10 @@
 
 ## v0.2
 
-- Search improvements
-- More presets
+### Planned
+
+- Improved search
+- More quick presets
 - Better statistics
 
 ---

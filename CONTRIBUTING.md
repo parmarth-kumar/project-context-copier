@@ -1,6 +1,8 @@
-# Build From Source
+# Contributing
 
-Clone repository
+## Development Setup
+
+Clone
 
 ```bash
 git clone https://github.com/parmarth-kumar/project-context-copier.git
@@ -8,7 +10,7 @@ git clone https://github.com/parmarth-kumar/project-context-copier.git
 cd project-context-copier
 ```
 
-Install dependencies
+Install
 
 ```bash
 pip install -r requirements.txt
@@ -32,8 +34,6 @@ pyinstaller ^
 main.py
 ```
 
----
+## Pull Requests
 
-# Contributing
-
-Contributions, issues and feature requests are welcome.
+Contributions, bug reports and feature requests are welcome.
