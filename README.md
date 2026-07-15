@@ -28,6 +28,7 @@ It is designed to keep project context organized, concise, and ready to use.
 
 ## Quick Links
 - [Detailed Features List](docs/FEATURES.md)
+- [Changelog](CHANGELOG.md)
 - [Development Roadmap](docs/ROADMAP.md)
 - [Contributing & Building from Source](CONTRIBUTING.md)
 
