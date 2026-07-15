@@ -58,7 +58,7 @@ Main application views:
 
 ---
 
-## Installation
+## Getting Started
 
 ### Download
 
