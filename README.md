@@ -113,4 +113,4 @@ Licensed under the MIT License.
 
 ## Author
 
-Developed by Parmarth Kumar Vidyarthi.
+Developed by Parmarth Kumar.
