@@ -39,7 +39,7 @@ Three copy modes:
 
 Copies complete project source.
 
-### Compact
+### Compact Context
 
 Removes:
 
@@ -49,11 +49,23 @@ Removes:
 
 while preserving functionality.
 
-### Skeleton Mode
+### Code Structure Mode
 
 Generates structural code only.
 
 Useful for architecture discussions.
+
+---
+
+## Live Token & Size Preview
+
+Displays live estimates of compressed file sizes and token counts directly inside the Copy Mode dropdown selector and status bar, allowing real-time inspection before copying.
+
+---
+
+## File Tree Search & Highlighting
+
+Filter tree nodes instantly with live match highlighting and one-click search clearing.
 
 ---
 

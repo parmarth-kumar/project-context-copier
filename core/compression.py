@@ -136,7 +136,7 @@ def compact_indent(content):
             scaled_spaces = (leading_spaces // 4) * 2 + (leading_spaces % 4)
             line = " " * scaled_spaces + line.lstrip(' ')
         new_lines.append(line)
-    return "\\n".join(new_lines)
+    return "\n".join(new_lines)
 
 def compact_blank_lines(content):
     lines = content.splitlines()
@@ -150,7 +150,7 @@ def compact_blank_lines(content):
         else:
             consecutive_empty = 0
             compacted_lines.append(line)
-    return "\\n".join(compacted_lines)
+    return "\n".join(compacted_lines)
 
 def compress_comments_whitespace(content, filepath):
     _, ext = os.path.splitext(filepath)

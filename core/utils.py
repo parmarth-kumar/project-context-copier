@@ -35,13 +35,13 @@ def get_git_diff(folder_path):
     try:
         res_unstaged = subprocess.run(
             ["git", "diff"],
-            cwd=folder_path, capture_output=True, text=True, check=True
+            cwd=folder_path, capture_output=True, text=True, check=True, encoding="utf-8", errors="replace"
         )
         res_staged = subprocess.run(
             ["git", "diff", "--cached"],
-            cwd=folder_path, capture_output=True, text=True, check=True
+            cwd=folder_path, capture_output=True, text=True, check=True, encoding="utf-8", errors="replace"
         )
-        diff_text = res_unstaged.stdout + "\\n" + res_staged.stdout
+        diff_text = res_unstaged.stdout + "\n" + res_staged.stdout
         return diff_text.strip()
     except Exception as e:
         return f"[Error running git diff: {str(e)}]"
@@ -116,8 +116,8 @@ def generate_project_mermaid_graph(active_files):
         mermaid_lines.append(f"    {clean_c_file}_{c_func} --> {clean_ce_file}_{ce_func}")
         
     if len(mermaid_lines) <= 1:
-        return "```mermaid\\n% No internal function call connections detected.\\n```"
-    return "```mermaid\\n" + "\\n".join(mermaid_lines) + "\\n```"
+        return "```mermaid\n% No internal function call connections detected.\n```"
+    return "```mermaid\n" + "\n".join(mermaid_lines) + "\n```"
 
 
 def get_local_ip():

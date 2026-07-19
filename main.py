@@ -41,7 +41,7 @@ def main():
         icon_ico = resource_path(os.path.join("assets", "icon.ico"))
         
         if os.path.exists(icon_ico):
-            root.iconbitmap(icon_ico)
+            root.iconbitmap(default=icon_ico)
         else:
             print(f"Warning: Icon not found at {icon_ico}")
             

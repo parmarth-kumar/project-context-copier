@@ -13,11 +13,14 @@
 
 ## v0.2
 
+### Completed
+
+- Improved search (tree highlighting & clear button)
+- Better statistics (live per-mode token & size previews)
+
 ### Planned
 
-- Improved search
 - More quick presets
-- Better statistics
 
 ---
 

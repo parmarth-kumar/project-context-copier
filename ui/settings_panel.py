@@ -14,13 +14,6 @@ class SettingsPanel(tk.Frame):
         self.header = tk.Frame(self.card, bg="#252538", padx=10, pady=5)
         self.header.pack(fill=tk.X)
         
-        self.lbl_recent = tk.Label(self.header, text="🕒 Recent:", bg="#252538", fg="#cdd6f4", font=("Segoe UI", 9, "bold"))
-        self.lbl_recent.pack(side=tk.LEFT, padx=(10, 2))
-
-        self.cbo_recent = ttk.Combobox(self.header, width=45, state="readonly")
-        self.cbo_recent.pack(side=tk.LEFT, padx=(0, 10), ipady=1)
-        self.cbo_recent.bind("<<ComboboxSelected>>", self.app.on_recent_selected)
-        
         self.btn_advanced_close = tk.Button(self.header, text="✕", command=self.app.toggle_advanced, bd=0, relief="flat", cursor="hand2", font=("Segoe UI", 10, "bold"))
         self.btn_advanced_close.pack(side=tk.RIGHT, padx=5)
 
@@ -81,7 +74,7 @@ class SettingsPanel(tk.Frame):
         self.cb_sound = tk.Checkbutton(self.frm_behavior, text="Sounds", variable=self.var_sound, command=self.app.on_checkbox_updated)
         self.cb_sound.pack(side=tk.LEFT, padx=5)
 
-        self.btn_reset = tk.Button(self.tab_filters_border, text="Reset defaults", command=self.app.reset_defaults, bg="#252538",
+        self.btn_reset = tk.Button(self.tab_filters_border, text="Reset defaults", command=self.confirm_reset_defaults, bg="#252538",
                                    bd=0, font=("Segoe UI", 8, "underline"), cursor="hand2")
         self.btn_reset.pack(anchor="e", padx=10, pady=(0, 5))
 
@@ -104,7 +97,7 @@ class SettingsPanel(tk.Frame):
         self.mnu_share = tk.Menu(self.app.root, tearoff=0)
         self.mnu_share.add_command(label="🌐 Share Normal", command=lambda: self.app.start_share_server_with_mode("None"))
         self.mnu_share.add_command(label="🧹 Share Comments & Whitespace Stripped", command=lambda: self.app.start_share_server_with_mode("1. Comments & Whitespace Stripping"))
-        self.mnu_share.add_command(label="🦴 Share Skeleton & Call Graph", command=lambda: self.app.start_share_server_with_mode("2. Skeleton (Signatures & Call Graph)"))
+        self.mnu_share.add_command(label="🦴 Share Code Structure & Call Graph", command=lambda: self.app.start_share_server_with_mode("2. Code Structure (Signatures & Call Graph)"))
         self.mnu_share.add_command(label="🌿 Share Git Diff Mode", command=lambda: self.app.start_share_server_with_mode("3. Git Diff / Change-Context Mode"))
 
         self.lbl_share_status = tk.Label(sharing_container, text="Server status: Stopped", font=("Segoe UI", 9, "italic"))
@@ -133,3 +126,50 @@ class SettingsPanel(tk.Frame):
         help_lbl.pack(fill=tk.X)
         
         return entry
+        
+    def confirm_reset_defaults(self):
+        if hasattr(self, "reset_popup") and self.reset_popup and self.reset_popup.winfo_exists():
+            self.reset_popup.lift()
+            self.reset_popup.focus_force()
+            return
+            
+        from config import THEMES
+        t = THEMES[self.app.state.current_theme]
+        popup = tk.Toplevel(self.app.root)
+        self.reset_popup = popup
+        
+        popup.title("Confirm Reset")
+        popup.geometry("300x120")
+        popup.configure(bg=t["bg"])
+        popup.transient(self.app.root)
+        self.app.apply_theme_title_bar(popup)
+        popup.grab_set()
+        
+
+        
+        # Center popup
+        x = self.app.root.winfo_x() + (self.app.root.winfo_width() // 2) - 150
+        y = self.app.root.winfo_y() + (self.app.root.winfo_height() // 2) - 60
+        popup.geometry(f"+{x}+{y}")
+        
+        lbl = tk.Label(popup, text="Reset all filters to defaults?", bg=t["bg"], fg=t["text_primary"], font=("Segoe UI", 10))
+        lbl.pack(pady=20)
+        
+        btn_frame = tk.Frame(popup, bg=t["bg"])
+        btn_frame.pack(pady=5)
+        
+        def do_reset(*args):
+            popup.destroy()
+            self.app.reset_defaults()
+            
+        btn_reset = tk.Button(btn_frame, text="Reset", command=do_reset, bg=t["lbl_status_error"], fg="#11111b" if self.app.state.current_theme == "dark" else t["bg"], bd=0, font=("Segoe UI", 9, "bold"), cursor="hand2", padx=15, pady=5)
+        btn_reset.pack(side=tk.LEFT, padx=10)
+        
+        btn_cancel = tk.Button(btn_frame, text="Cancel", command=popup.destroy, bg=t["card_bg"], fg=t["text_primary"], bd=0, font=("Segoe UI", 9), cursor="hand2", padx=15, pady=5)
+        btn_cancel.pack(side=tk.LEFT, padx=10)
+        
+        popup.bind("<Return>", do_reset)
+        popup.bind("<Escape>", lambda e: popup.destroy())
+        
+        # Ensure correct tab ordering and safe initial focus
+        btn_cancel.focus_set()

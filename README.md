@@ -2,7 +2,7 @@
 
 > Prepare your codebase for AI assistants in one click.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)  ![Platform](https://img.shields.io/badge/Platform-Windows-success.svg)  ![License](https://img.shields.io/badge/License-MIT-green.svg)  ![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)  ![Platform](https://img.shields.io/badge/Platform-Windows-success.svg)  ![License](https://img.shields.io/badge/License-MIT-green.svg)  ![Status](https://img.shields.io/badge/Status-Beta-blue.svg)
 
 ---
 
@@ -37,7 +37,7 @@ Project Context Copier automates this process and produces a single, structured 
 - 🔍 Smart filtering with extension, folder and regex support
 - 📋 One-click clipboard packaging
 - 🧹 Comment and whitespace compression
-- 🦴 Skeleton generation
+- 🦴 Code structure extraction
 - 📊 Mermaid project graphs
 - 🌿 Git Diff mode
 - 🌐 LAN sharing
@@ -68,7 +68,7 @@ page.
 
 Download:
 
-- [`ProjectContextCopier-v0.1.0-alpha.zip`](https://github.com/parmarth-kumar/project-context-copier/releases/download/v0.1.0-alpha/ProjectContextCopier-v0.1.0-alpha.zip)
+- [`ProjectContextCopier-v0.2.0-beta.zip`](https://github.com/parmarth-kumar/project-context-copier/releases/download/v0.2.0-beta/ProjectContextCopier-v0.2.0-beta.zip)
 
 ### Run
 
@@ -103,7 +103,7 @@ No Python installation is required.
 - [Detailed Features List](docs/FEATURES.md)
 - [Changelog](CHANGELOG.md)
 - [Development Roadmap](docs/ROADMAP.md)
-- [Contributing & Building from Source](CONTRIBUTING.md)
+- [Contributing &amp; Building from Source](CONTRIBUTING.md)
 
 ---
 
@@ -113,4 +113,4 @@ Licensed under the MIT License.
 
 ## Author
 
-Developed by Parmarth Kumar.
+Developed by [parmarth-kumar](https://github.com/parmarth-kumar).

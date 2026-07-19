@@ -3,12 +3,35 @@ import json
 
 # --- APP INFO ---
 APP_NAME = "Project Context Copier"
-VERSION = "0.1.0-alpha"
+VERSION = "0.2.0-beta"
 AUTHOR = "Parmarth"
+
+PRESETS = {
+    "Python Project": {
+        "allowed": ".py, .md, .txt",
+        "folders": ".venv, venv, __pycache__, .git, README, node_modules, stress_tests, pytest_cache, utilities, memory, experiments",
+        "files": ".env, .gitignore, stress_test.py"
+    },
+    "NodeJS / React": {
+        "allowed": ".js, .jsx, .ts, .tsx, .json, .md, .css",
+        "folders": "node_modules, build, dist, .git, .env, .next, .cache",
+        "files": ".env, .env.local, .gitignore, package-lock.json"
+    },
+    "Android Project": {
+        "allowed": ".kt, .java, .xml, .properties, .gradle",
+        "folders": ".gradle, build, .idea, captures, .git",
+        "files": "local.properties, .gitignore"
+    },
+    "Markdown Docs": {
+        "allowed": ".md, .txt, .rst",
+        "folders": ".git, node_modules, build",
+        "files": ".gitignore"
+    }
+}
 
 # --- DEFAULT CONFIGURATION ---
 DEFAULT_CONFIG = {
-    "allowed_extensions": ".py, .md, .kt, txt",
+    "allowed_extensions": ".py, .md, .txt",
     "ignored_folders": ".venv, venv, __pycache__, .git, README, node_modules, stress_tests, pytest_cache, utilities, memory, experiments",
     "ignored_files": ".env, .gitignore, stress_test.py",
     "theme": "dark",
@@ -21,6 +44,7 @@ DEFAULT_CONFIG = {
     "parse_gitignore": True,
     "git_diff_only": False,
     "sound_enabled": True,
+    "watch_live_updates": True,
     "geometry": "1000x850",
     "compress_mode": "None"
 }

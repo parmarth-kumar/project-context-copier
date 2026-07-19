@@ -127,6 +127,9 @@ class ProjectContextCopierApp:
         self.state.share_server = None
         self.ui.win_tooltip = None
         self.state.selected_preview_file = None
+        self.state.toast_queue = []
+        self.state.toast_active = False
+        self.state.warning_timer = None
         
         # Real-time modification watch variables
         self.cache.preview_file_mtime = None
@@ -135,6 +138,16 @@ class ProjectContextCopierApp:
         self.cache.stats_cache = {}
 
         self.create_widgets()
+        
+        if self.config.get("advanced_visible", False):
+            self.toggle_advanced()
+            
+        try:
+            tab_index = self.config.get("advanced_tab_index", 0)
+            self.settings.nbk_config.select(tab_index)
+        except Exception:
+            pass
+            
         self.apply_current_theme()
 
         # Window Position Saving on Close
@@ -154,13 +167,14 @@ class ProjectContextCopierApp:
         # Show the fully rendered window
         self.root.deiconify()
 
-    def apply_theme_title_bar(self):
-        self.root.update()
+    def apply_theme_title_bar(self, window=None):
+        target_win = window if window else self.root
+        target_win.update()
         try:
             import ctypes
-            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            hwnd = ctypes.windll.user32.GetParent(target_win.winfo_id())
             if hwnd == 0:
-                hwnd = self.root.winfo_id()
+                hwnd = target_win.winfo_id()
             value = ctypes.c_int(1 if self.state.current_theme == "dark" else 0)
             result = ctypes.windll.dwmapi.DwmSetWindowAttribute(
                 hwnd, 20, ctypes.byref(value), ctypes.sizeof(value)
@@ -175,6 +189,17 @@ class ProjectContextCopierApp:
     def on_close(self):
         """Saves current window geometry to config and exits."""
         self.config["geometry"] = self.root.winfo_geometry()
+        self.config["advanced_visible"] = getattr(self.state, "advanced_visible", False)
+        if hasattr(self, 'settings') and hasattr(self.settings, 'nbk_config'):
+            try:
+                self.config["advanced_tab_index"] = self.settings.nbk_config.index(self.settings.nbk_config.select())
+            except Exception:
+                pass
+        if hasattr(self, 'ui') and hasattr(self.ui, 'pan_explorer'):
+            try:
+                self.config["explorer_sash"] = self.ui.pan_explorer.sash_coord(0)[0]
+            except Exception:
+                pass
         save_config(self.config)
         if self.state.share_server:
             self.state.share_server.stop()
@@ -282,8 +307,6 @@ class ProjectContextCopierApp:
             self.toolbar.frm_copy_row.configure(bg=t["bg"])
             self.toolbar.frm_quick_presets.configure(bg=t["bg"])
             self.toolbar.lbl_quick_presets.configure(bg=t["bg"], fg=t["accent"])
-        self.settings.cbo_recent.configure(style="TCombobox")
-
         # Status footer
         if hasattr(self, 'status'):
             # Note: StatusBar is a ttk.Frame, but we configure its labels
@@ -296,7 +319,7 @@ class ProjectContextCopierApp:
             (self.toolbar.load_folder_button if hasattr(self, 'toolbar') else self.ui.btn_load_folder, t["accent"], t["accent_hover"], "#11111b" if self.state.current_theme == "dark" else t["bg"]),
             (self.toolbar.load_files_button if hasattr(self, 'toolbar') else self.ui.btn_load_files, t["accent"], t["accent_hover"], "#11111b" if self.state.current_theme == "dark" else t["bg"]),
             (self.toolbar.copy_button if hasattr(self, 'toolbar') else self.ui.btn_copy, t["copy_btn"], t["copy_btn_hover"], "#11111b" if self.state.current_theme == "dark" else t["bg"]),
-            (self.toolbar.copy_mode_dropdown if hasattr(self, 'toolbar') else self.ui.cbo_copy_mode, t["copy_btn"], t["copy_btn_hover"], "#11111b" if self.state.current_theme == "dark" else t["bg"]),
+            (self.toolbar.btn_export_options if hasattr(self, 'toolbar') else None, t["copy_btn"], t["copy_btn_hover"], "#11111b" if self.state.current_theme == "dark" else t["bg"]),
             (self.ui.btn_theme, t["bg"], t["entry_bg"], t["text_primary"]),
             (self.ui.btn_settings, t["bg"], t["entry_bg"], t["text_primary"]),
             (self.settings.btn_reset, t["card_bg"], t["entry_bg"], t["lbl_status_error"]),
@@ -304,11 +327,13 @@ class ProjectContextCopierApp:
         ]
         
         if hasattr(self, 'toolbar'):
-            self.toolbar.copy_mode_dropdown["menu"].config(
-                bg=t["bg"], fg=t["text_primary"], font=("Segoe UI", 9), bd=0,
-                activebackground=t["copy_btn_hover"], 
-                activeforeground="#11111b" if self.state.current_theme == "dark" else t["bg"]
-            )
+            from tkinter import ttk
+            if not isinstance(self.toolbar.copy_mode_dropdown, ttk.Combobox):
+                self.toolbar.copy_mode_dropdown["menu"].config(
+                    bg=t["bg"], fg=t["text_primary"], font=("Segoe UI", 9), bd=0,
+                    activebackground=t["copy_btn_hover"], 
+                    activeforeground="#11111b" if self.state.current_theme == "dark" else t["bg"]
+                )
         
         if hasattr(self, 'toolbar'):
             for btn in self.toolbar.quick_presets_buttons:
@@ -336,18 +361,20 @@ class ProjectContextCopierApp:
             self.sidebar.search_wrapper.configure(bg=t["bg"])
             self.sidebar.search_frame.configure(bg=t["entry_bg"], highlightbackground=t["entry_border"])
             self.sidebar.search_icon.configure(bg=t["entry_bg"], fg=t["text_secondary"])
-            self.sidebar.search_entry.configure(bg=t["entry_bg"], fg=t["text_primary"], insertbackground=t["text_primary"], highlightthickness=0)
+            self.sidebar.btn_clear_search.configure(bg=t["entry_bg"], fg=t["text_secondary"])
+            is_placeholder = self.sidebar.search_entry.get() == "Search files..."
+            self.sidebar.search_entry.configure(bg=t["entry_bg"], fg=t["text_secondary"] if is_placeholder else t["text_primary"], insertbackground=t["text_primary"], highlightthickness=0)
             self.sidebar.tree.configure(bg=t["console_bg"], fg=t["text_primary"])
             self.sidebar.tree.tag_configure("code", foreground=t["tag_code"])
             self.sidebar.tree.tag_configure("doc", foreground=t["tag_doc"])
             self.sidebar.tree.tag_configure("config", foreground=t["tag_config"])
+            self.sidebar.tree.tag_configure("hover", background=t["entry_border"])
 
         if hasattr(self, 'preview'):
             self.preview.configure(bg=t['bg'], highlightbackground=t['entry_border'])
             self.preview.title_label.configure(bg=t["bg"], fg=t["text_primary"])
             self.preview.meta_wrapper.configure(bg=t["bg"])
-            self.preview.meta_frame.configure(bg=t["entry_bg"], highlightbackground=t["entry_border"])
-            self.preview.meta_label.configure(bg=t["entry_bg"], fg=t["text_secondary"], readonlybackground=t["entry_bg"])
+            self.preview.meta_label.configure(bg=t["bg"], fg=t["text_secondary"])
             self.preview.code_view.configure(bg=t["console_bg"], fg=t["text_primary"])
 
         if hasattr(self, 'status'):
@@ -368,6 +395,78 @@ class ProjectContextCopierApp:
         ])
         scrollbar_style.configure("Dark.Vertical.TScrollbar", gripcount=0, background=t["scrollbar_thumb"], troughcolor=t["console_bg"], bordercolor=t["console_bg"], lightcolor=t["console_bg"], darkcolor=t["console_bg"], width=10)
         scrollbar_style.map("Dark.Vertical.TScrollbar", background=[('active', t["entry_border"]), ('pressed', t["text_secondary"])])
+
+        # --- Header Recent Combobox theming ---
+        is_dark = self.state.current_theme == "dark"
+        fg_on_accent = "#11111b" if is_dark else t["bg"]
+
+        self.ui.frm_recent.configure(bg=t["bg"])
+        self.ui.frm_recent_inner.configure(bg=t["entry_bg"], highlightbackground=t["entry_border"])
+
+
+        combo_style = ttk.Style()
+        combo_style.theme_use('clam')
+        combo_style.configure(
+            "Header.TCombobox",
+            fieldbackground=t["entry_bg"],
+            background=t["entry_bg"],
+            foreground=t["text_primary"],
+            arrowcolor=t["text_secondary"],
+            bordercolor=t["entry_bg"],
+            lightcolor=t["entry_bg"],
+            darkcolor=t["entry_bg"],
+            relief="flat",
+            padding=2
+        )
+        combo_style.map(
+            "Header.TCombobox",
+            fieldbackground=[('readonly', t["entry_bg"])],
+            foreground=[('readonly', t["text_primary"])],
+            background=[('readonly', t["entry_bg"])],
+            arrowcolor=[('active', t["accent"])],
+            selectbackground=[('readonly', t["entry_bg"]), ('focus', t["entry_bg"])],
+            selectforeground=[('readonly', t["text_primary"]), ('focus', t["text_primary"])]
+        )
+        
+        btn_fg = "#11111b" if self.state.current_theme == "dark" else t["bg"]
+        combo_style.configure(
+            "CopyMode.TCombobox",
+            fieldbackground=t["copy_btn"],
+            background=t["copy_btn"],
+            foreground=btn_fg,
+            arrowcolor=btn_fg,
+            bordercolor=t["copy_btn"],
+            lightcolor=t["copy_btn"],
+            darkcolor=t["copy_btn"],
+            relief="flat",
+            padding=2
+        )
+        combo_style.map(
+            "CopyMode.TCombobox",
+            fieldbackground=[('readonly', t["copy_btn"])],
+            foreground=[('readonly', btn_fg)],
+            background=[('readonly', t["copy_btn"])],
+            arrowcolor=[('active', btn_fg)],
+            selectbackground=[('readonly', t["copy_btn"]), ('focus', t["copy_btn"])],
+            selectforeground=[('readonly', btn_fg), ('focus', btn_fg)]
+        )
+
+        # Dropdown listbox colors (ttk doesn't expose this via style alone)
+        self.root.option_add('*TCombobox*Listbox.background', t["entry_bg"])
+        self.root.option_add('*TCombobox*Listbox.foreground', t["text_primary"])
+        self.root.option_add('*TCombobox*Listbox.selectBackground', t["accent"])
+        self.root.option_add('*TCombobox*Listbox.selectForeground', fg_on_accent)
+        self.root.option_add('*TCombobox*Listbox.font', ("Segoe UI", 9))
+
+        try:
+            self.root.tk.eval(f'''
+                set popdown [ttk::combobox::PopdownWindow {self.ui.cbo_recent}]
+                if {{[winfo exists $popdown]}} {{
+                    $popdown.f.l configure -background "{t['entry_bg']}" -foreground "{t['text_primary']}" -selectbackground "{t['accent']}" -selectforeground "{fg_on_accent}"
+                }}
+            ''')
+        except Exception:
+            pass
 
         self.refresh_pills()
 
@@ -423,6 +522,15 @@ class ProjectContextCopierApp:
         self.ui.pan_explorer.add(self.sidebar, minsize=250, width=375, stretch="never")
         self.ui.pan_explorer.add(self.preview, minsize=350, stretch="always")
         
+        if "explorer_sash" in self.config:
+            def restore_sash():
+                try:
+                    self.ui.pan_explorer.update_idletasks()
+                    self.ui.pan_explorer.sash_place(0, self.config["explorer_sash"], 0)
+                except Exception:
+                    pass
+            self.root.after(100, restore_sash)
+        
 
         # Initial placeholders
         empty_tree_state = (
@@ -438,20 +546,44 @@ class ProjectContextCopierApp:
         # Header layout
         self.ui.frm_header = tk.Frame(self.root, bg="#1e1e2e", pady=10)
         self.ui.frm_header.pack(fill=tk.X, padx=20)
-        
+
         self.ui.lbl_title = tk.Label(self.ui.frm_header, text="Project Context Copier", bg="#1e1e2e", fg="#cba6f7",
                                   font=("Segoe UI", 15, "bold"), anchor="w")
         self.ui.lbl_title.pack(side=tk.LEFT)
-        
+
         self.ui.btn_settings = tk.Button(self.ui.frm_header, text="⚙️ Settings", command=self.toggle_advanced,
                                    bg="#252538", fg="#cdd6f4", bd=0, relief="flat", padx=10, pady=5,
                                    font=("Segoe UI", 9, "bold"), cursor="hand2")
         self.ui.btn_settings.pack(side=tk.RIGHT)
-        
+
         self.ui.btn_theme = tk.Button(self.ui.frm_header, text="☀️ Light Mode", command=self.toggle_theme,
                                    bg="#252538", fg="#cdd6f4", bd=0, relief="flat", padx=10, pady=5,
                                    font=("Segoe UI", 9, "bold"), cursor="hand2")
         self.ui.btn_theme.pack(side=tk.RIGHT, padx=(0, 10))
+
+        # --- RECENT PROJECTS (compact header dropdown, sits between title and action buttons) ---
+        self.ui.frm_recent = tk.Frame(self.ui.frm_header, bg="#1e1e2e")
+        self.ui.frm_recent.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(25, 10))
+
+        self.ui.frm_recent_inner = tk.Frame(
+            self.ui.frm_recent, bg="#313244", bd=0,
+            highlightthickness=1, highlightbackground="#45475a"
+        )
+        self.ui.frm_recent_inner.pack(side=tk.RIGHT, ipady=1)
+
+
+
+        style = ttk.Style()
+        style.theme_use('clam')
+        self.ui.cbo_recent = ttk.Combobox(
+            self.ui.frm_recent_inner, width=30, state="readonly",
+            style="Header.TCombobox", font=("Segoe UI", 9)
+        )
+        self.ui.cbo_recent.pack(side=tk.LEFT, padx=(2, 8), pady=3)
+        self.ui.cbo_recent.set("No recent projects")
+        self.ui.cbo_recent.bind("<<ComboboxSelected>>", self.on_recent_selected)
+        self.ui.cbo_recent.bind("<Enter>", self.show_combo_tooltip)
+        self.ui.cbo_recent.bind("<Leave>", self.hide_combo_tooltip)
 
 
     # --- PILLS TAGS RENDER LOGIC ---
@@ -510,13 +642,27 @@ class ProjectContextCopierApp:
 
     # --- TOAST NOTIFICATIONS ANIMATION ---
     def show_toast(self, message, state="success"):
-        """Animates a success/error toast banner from the bottom."""
+        """Queues and animates a success/error toast banner from the bottom."""
+        self.state.toast_queue.append((message, state))
+        if not getattr(self.state, 'toast_active', False):
+            self.process_toast_queue()
+
+    def process_toast_queue(self):
+        if not self.state.toast_queue:
+            self.state.toast_active = False
+            return
+            
+        self.state.toast_active = True
+        message, state = self.state.toast_queue.pop(0)
+
         t = THEMES[self.state.current_theme]
         bg_col = t["lbl_status_success"] if state == "success" else t["lbl_status_error"]
         fg_col = "#11111b" if self.state.current_theme == "dark" else t["bg"]
 
         # Configure toast
-        self.ui.frm_toast_banner.destroy()
+        if hasattr(self.ui, 'frm_toast_banner') and self.ui.frm_toast_banner.winfo_exists():
+            self.ui.frm_toast_banner.destroy()
+            
         self.ui.frm_toast_banner = tk.Frame(self.root, bg=bg_col, bd=0, highlightbackground=t["entry_border"], highlightthickness=1)
         self.ui.frm_toast_banner.place(relx=0.5, rely=1.0, anchor="s", relwidth=0.6, height=45)
 
@@ -528,11 +674,11 @@ class ProjectContextCopierApp:
             if curr_height < 45:
                 self.ui.frm_toast_banner.place(rely=1.0 - (curr_height / self.root.winfo_height()))
                 self.root.after(10, lambda: slide_up(curr_height + 5))
+            else:
+                # Auto dismissal
+                self.root.after(2500, self.hide_toast)
 
         slide_up(5)
-
-        # Auto dismissal
-        self.root.after(2500, self.hide_toast)
 
     def hide_toast(self):
         """Slides the toast banner back down."""
@@ -542,9 +688,12 @@ class ProjectContextCopierApp:
                 self.root.after(10, lambda: slide_down(curr_height - 5))
             else:
                 self.ui.frm_toast_banner.place_forget()
+                self.process_toast_queue()
 
-        if self.ui.frm_toast_banner.winfo_exists():
+        if hasattr(self.ui, 'frm_toast_banner') and self.ui.frm_toast_banner.winfo_exists():
             slide_down(45)
+        else:
+            self.process_toast_queue()
 
     # --- LAN SHARING SERVER CONTROL ---
     # --- LAN SHARING SERVER CONTROL ---
@@ -558,13 +707,15 @@ class ProjectContextCopierApp:
             self.state.share_server = None
             self.settings.btn_lan_share.config(text="🌐 Start LAN Share Server", bg=t["accent"])
             self.settings.lbl_share_status.config(text="Server status: Stopped")
+        else:
+            self.show_share_menu()
 
     def show_share_menu(self):
         """Shows the dropdown sharing options menu right below the LAN share button."""
-        self.play_sound("click")
         if self.state.share_server:
             self.toggle_lan_share()
         else:
+            self.play_sound("click")
             self.root.update_idletasks()
             x = self.settings.btn_lan_share.winfo_rootx()
             y = self.settings.btn_lan_share.winfo_rooty() + self.settings.btn_lan_share.winfo_height()
@@ -587,7 +738,7 @@ class ProjectContextCopierApp:
             short_mode = mode.split(".")[0].strip() if "." in mode else "Normal"
             self.settings.lbl_share_status.config(text=f"Server status: Running ({short_mode} Mode) at {url}", fg=t["lbl_status_ready"])
             # Copy LAN URL to clipboard
-            copy_to_clipboard(url, self.root)
+            copy_to_clipboard(url)
             self.show_toast("LAN URL copied to clipboard!", "success")
             self.play_sound("success")
         else:
@@ -605,7 +756,7 @@ class ProjectContextCopierApp:
                     curr_mtime = os.path.getmtime(self.state.selected_preview_file)
                     if self.cache.preview_file_mtime is not None and curr_mtime != self.cache.preview_file_mtime:
                         self.cache.preview_file_mtime = curr_mtime
-                        self.load_active_file_preview()
+                        self.load_active_file_preview(preserve_scroll=True)
                 except Exception:
                     pass
 
@@ -652,27 +803,61 @@ class ProjectContextCopierApp:
             self.root.after(1500, self.poll_file_changes)
 
     # --- RECENT PATHS HISTORY ---
-    def truncate_path(self, path, max_len=45):
-        """Truncates long paths for UI display."""
-        if len(path) <= max_len:
-            return path
-        parts = path.split(os.sep)
-        if len(parts) > 2:
-            return f"{parts[0]}{os.sep}...{os.sep}{parts[-2]}{os.sep}{parts[-1]}"
-        return path[:max_len-3] + "..."
+    def get_recent_display_name(self, path, history):
+        """Generates a clean display name, disambiguating duplicates if needed."""
+        import os
+        basename = os.path.basename(os.path.normpath(path))
+        
+        duplicates = [p for p in history if os.path.basename(os.path.normpath(p)) == basename]
+        if len(duplicates) > 1:
+            parent = os.path.basename(os.path.dirname(os.path.normpath(path)))
+            return f"📁 {basename}  ({parent}/...)"
+        return f"📁 {basename}"
 
     def update_recent_history_ui(self):
         history = self.config.get("recent_folders", [])
-        self.state.recent_mapping = {self.truncate_path(p): p for p in history}
-        self.settings.cbo_recent["values"] = list(self.state.recent_mapping.keys())
         
+        self.state.recent_mapping = {}
+        for p in history:
+            self.state.recent_mapping[self.get_recent_display_name(p, history)] = p
+            
+        self.ui.cbo_recent["values"] = list(self.state.recent_mapping.keys())
+
         if hasattr(self.state, 'active_folder') and self.state.active_folder and self.state.active_folder in history:
-            self.settings.cbo_recent.set(self.truncate_path(self.state.active_folder))
+            self.ui.cbo_recent.set(self.get_recent_display_name(self.state.active_folder, history))
         elif history:
-            self.settings.cbo_recent.set("History list...")
+            self.ui.cbo_recent.set("🕒  Open recent...")
+        else:
+            self.ui.cbo_recent.set("Recent projects...")
+            
+    def show_combo_tooltip(self, event):
+        selected_display = self.ui.cbo_recent.get()
+        if not hasattr(self.state, 'recent_mapping') or selected_display not in self.state.recent_mapping:
+            return
+            
+        full_path = self.state.recent_mapping[selected_display]
+        if getattr(self.ui, 'combo_tooltip', None):
+            self.ui.combo_tooltip.destroy()
+            
+        self.ui.combo_tooltip = tk.Toplevel(self.root)
+        self.ui.combo_tooltip.wm_overrideredirect(True)
+        
+        x = self.root.winfo_pointerx() + 15
+        y = self.root.winfo_pointery() + 15
+        self.ui.combo_tooltip.wm_geometry(f"+{x}+{y}")
+        
+        t = THEMES[self.state.current_theme]
+        lbl = tk.Label(self.ui.combo_tooltip, text=full_path, bg=t["entry_bg"], fg=t["text_primary"], justify=tk.LEFT,
+                       highlightbackground=t["entry_border"], highlightthickness=1, font=("Segoe UI", 8), padx=5, pady=3)
+        lbl.pack()
+
+    def hide_combo_tooltip(self, event):
+        if getattr(self.ui, 'combo_tooltip', None):
+            self.ui.combo_tooltip.destroy()
+            self.ui.combo_tooltip = None
 
     def on_recent_selected(self, event=None):
-        selected_display = self.settings.cbo_recent.get()
+        selected_display = self.ui.cbo_recent.get()
         if not hasattr(self.state, 'recent_mapping') or selected_display not in self.state.recent_mapping:
             return
             
@@ -716,35 +901,14 @@ class ProjectContextCopierApp:
         self.refresh_filter()
 
     def detect_active_preset(self):
-        presets = {
-            "Python Project": {
-                "allowed": ".py, .md, .kt, txt",
-                "folders": ".venv, venv, __pycache__, .git, README, node_modules, stress_tests, pytest_cache, utilities, memory, experiments",
-                "files": ".env, .gitignore, stress_test.py"
-            },
-            "NodeJS / React": {
-                "allowed": ".js, .jsx, .ts, .tsx, .json, .md, .css",
-                "folders": "node_modules, build, dist, .git, .env, .next, .cache",
-                "files": ".env, .env.local, .gitignore, package-lock.json"
-            },
-            "Android Project": {
-                "allowed": ".kt, .java, .xml, .properties, .gradle",
-                "folders": ".gradle, build, .idea, captures, .git",
-                "files": "local.properties, .gitignore"
-            },
-            "Markdown Docs": {
-                "allowed": ".md, .txt, .rst",
-                "folders": ".git, node_modules, build",
-                "files": ".gitignore"
-            }
-        }
+        from config import PRESETS
         
         current_allowed = self.settings.ent_extensions.get().strip()
         current_folders = self.settings.ent_ignored_folders.get().strip()
         current_files = self.settings.ent_ignored_files.get().strip()
 
         matched_preset = "Custom"
-        for name, data in presets.items():
+        for name, data in PRESETS.items():
             if data["allowed"] == current_allowed and data["folders"] == current_folders and data["files"] == current_files:
                 matched_preset = name
                 break
@@ -765,31 +929,10 @@ class ProjectContextCopierApp:
             self.show_toast("Cleared filters (Custom mode)", "success")
             return
             
-        presets = {
-            "Python Project": {
-                "allowed": ".py, .md, .kt, txt",
-                "folders": ".venv, venv, __pycache__, .git, README, node_modules, stress_tests, pytest_cache, utilities, memory, experiments",
-                "files": ".env, .gitignore, stress_test.py"
-            },
-            "NodeJS / React": {
-                "allowed": ".js, .jsx, .ts, .tsx, .json, .md, .css",
-                "folders": "node_modules, build, dist, .git, .env, .next, .cache",
-                "files": ".env, .env.local, .gitignore, package-lock.json"
-            },
-            "Android Project": {
-                "allowed": ".kt, .java, .xml, .properties, .gradle",
-                "folders": ".gradle, build, .idea, captures, .git",
-                "files": "local.properties, .gitignore"
-            },
-            "Markdown Docs": {
-                "allowed": ".md, .txt, .rst",
-                "folders": ".git, node_modules, build",
-                "files": ".gitignore"
-            }
-        }
+        from config import PRESETS
 
-        if preset in presets:
-            data = presets[preset]
+        if preset in PRESETS:
+            data = PRESETS[preset]
             self.settings.ent_extensions.delete(0, tk.END)
             self.settings.ent_extensions.insert(0, data["allowed"])
             
@@ -1063,12 +1206,12 @@ class ProjectContextCopierApp:
                         else:
                             checkbox = "[-] "
                             
-                    tree_lines[line_num - 1] = f"{indent}{marker}{checkbox}{key}"
+                    tree_lines[line_num - 1] = f"{indent}{marker}{checkbox}{key}".ljust(200)
                     self.cache.tree_line_mapping[line_num] = ("folder", sub_files)
                 else:
                     line_num = len(tree_lines) + 1
                     checkbox = "☐ " if value in self.state.unchecked_files else "☑ "
-                    tree_lines.append(f"{indent}{marker}{checkbox}{key}")
+                    tree_lines.append(f"{indent}{marker}{checkbox}{key}".ljust(200))
                     self.cache.tree_line_mapping[line_num] = ("file", value)
                     folder_files.append(value)
                     
@@ -1085,18 +1228,39 @@ class ProjectContextCopierApp:
         self.sidebar.tree.tag_configure("code", foreground=t["tag_code"])
         self.sidebar.tree.tag_configure("doc", foreground=t["tag_doc"])
         self.sidebar.tree.tag_configure("config", foreground=t["tag_config"])
+        self.sidebar.tree.tag_configure("selected", background=t["accent"], foreground="#11111b" if self.state.current_theme == "dark" else t["bg"], font=("Consolas", 9, "bold"))
+        self.sidebar.tree.tag_configure("search_match", font=("Consolas", 9, "bold"), foreground=t.get("accent", "#89b4fa"))
+        
+        search_term = self.sidebar.search_entry.get().strip().lower()
+        if search_term == "search files...":
+            search_term = ""
 
         # Iterate lines and assign tag colors
         for line_idx in range(1, len(tree_lines) + 1):
             line_txt = self.sidebar.tree.get(f"{line_idx}.0", f"{line_idx}.end")
             ext = os.path.splitext(line_txt)[1].lower()
             
-            if ext in [".py", ".kt", ".java", ".js", ".jsx", ".ts", ".tsx"]:
-                self.sidebar.tree.tag_add("code", f"{line_idx}.0", f"{line_idx}.end")
-            elif ext in [".md", ".txt", ".rst"]:
-                self.sidebar.tree.tag_add("doc", f"{line_idx}.0", f"{line_idx}.end")
-            elif ext in [".json", ".xml", ".properties", ".gradle", ".env", ".gitignore"]:
-                self.sidebar.tree.tag_add("config", f"{line_idx}.0", f"{line_idx}.end")
+            node_type, data = self.cache.tree_line_mapping.get(line_idx, (None, None))
+            is_selected = node_type == "file" and data == getattr(self.state, "selected_preview_file", None)
+            
+            if is_selected:
+                self.sidebar.tree.tag_add("selected", f"{line_idx}.0", f"{line_idx}.end + 1c")
+            else:
+                if ext in [".py", ".kt", ".java", ".js", ".jsx", ".ts", ".tsx"]:
+                    self.sidebar.tree.tag_add("code", f"{line_idx}.0", f"{line_idx}.end")
+                elif ext in [".md", ".txt", ".rst"]:
+                    self.sidebar.tree.tag_add("doc", f"{line_idx}.0", f"{line_idx}.end")
+                elif ext in [".json", ".xml", ".properties", ".gradle", ".env", ".gitignore"]:
+                    self.sidebar.tree.tag_add("config", f"{line_idx}.0", f"{line_idx}.end")
+            
+            if search_term and not is_selected:
+                start_idx = 0
+                while True:
+                    idx = line_txt.lower().find(search_term, start_idx)
+                    if idx == -1:
+                        break
+                    self.sidebar.tree.tag_add("search_match", f"{line_idx}.{idx}", f"{line_idx}.{idx + len(search_term)}")
+                    start_idx = idx + len(search_term)
                 
         self.sidebar.tree.config(state="disabled")
 
@@ -1120,21 +1284,26 @@ class ProjectContextCopierApp:
         if xview:
             self.sidebar.tree.xview_moveto(xview[0])
 
-    def set_code_view_content(self, text):
+    def set_code_view_content(self, text, preserve_scroll=False):
+        yview = None
+        if preserve_scroll:
+            yview = self.preview.code_view.yview()
+        elif getattr(self.state, 'selected_preview_file', None) and getattr(self.cache, 'file_scroll_states', {}).get(self.state.selected_preview_file):
+            yview = self.cache.file_scroll_states[self.state.selected_preview_file]
         self.preview.code_view.config(state="normal")
         self.preview.code_view.delete("1.0", tk.END)
         self.preview.code_view.insert(tk.END, text)
         self.preview.code_view.config(state="disabled")
+        if yview:
+            self.preview.code_view.update_idletasks()
+            self.preview.code_view.yview_moveto(yview[0])
 
     # --- SPLIT SCREEN EXPLORER CLICK & INTERACTION ---
-    def load_active_file_preview(self):
+    def load_active_file_preview(self, preserve_scroll=False):
         """Loads, redacts, and displays the content of the currently selected file."""
         if not self.state.selected_preview_file or not os.path.exists(self.state.selected_preview_file):
             if hasattr(self, 'preview'):
-                self.preview.meta_label.config(state="normal")
-                self.preview.meta_label.delete(0, tk.END)
-                self.preview.meta_label.insert(0, " Select a file...")
-                self.preview.meta_label.config(state="readonly")
+                self.preview.meta_label.config(text=" Select a file to preview...")
             return
         try:
             self.cache.preview_file_mtime = os.path.getmtime(self.state.selected_preview_file)
@@ -1149,22 +1318,32 @@ class ProjectContextCopierApp:
             lines = content.count('\n') + 1
             _, ext = os.path.splitext(file_name)
             lang = ext.replace('.', '').upper() if ext else "TEXT"
-            meta_text = f"File: {file_name}   |   Size: {size_kb:.2f} KB   |   Lines: {lines}   |   Lang: {lang}"
-            self.preview.meta_label.config(state="normal")
-            self.preview.meta_label.delete(0, tk.END)
-            self.preview.meta_label.insert(0, meta_text)
-            self.preview.meta_label.config(state="readonly")
+            meta_text = f" File: {file_name}   |   Size: {size_kb:.2f} KB   |   Lines: {lines}   |   Lang: {lang}"
+            self.preview.meta_label.config(text=meta_text)
 
         # Apply keyword redactions to preview window
         redact_keys = [k.strip() for k in self.settings.ent_redact.get().split(",") if k.strip()]
         for secret in redact_keys:
             content = content.replace(secret, "[REDACTED]")
             
+        # Apply mode formatting if selected
+        if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'var_copy_mode'):
+            import re
+            mode = re.sub(r'\s*\(~.*?\)$', '', self.toolbar.var_copy_mode.get()).strip()
+            if mode == "Compact Context":
+                content = compress_comments_whitespace(content, self.state.selected_preview_file)
+            elif mode == "Code Structure":
+                content = generate_skeleton(content, self.state.selected_preview_file)
+            elif mode == "Git Diff":
+                content = self.get_file_git_diff(self.state.selected_preview_file)
+            elif mode == "Mermaid Graph":
+                content = generate_project_mermaid_graph([self.state.selected_preview_file])
+                
         _, ext = os.path.splitext(self.state.selected_preview_file)
         if ext.lower() == ".md":
-            self.render_rich_markdown(content)
+            self.render_rich_markdown(content, preserve_scroll=preserve_scroll)
         else:
-            self.set_code_view_content(content)
+            self.set_code_view_content(content, preserve_scroll=preserve_scroll)
 
     def get_file_git_diff(self, filepath):
         """Gets Git diff changes specifically for a single file."""
@@ -1174,11 +1353,11 @@ class ProjectContextCopierApp:
             rel_path = os.path.relpath(filepath, self.state.active_folder)
             res = subprocess.run(
                 ["git", "diff", rel_path],
-                cwd=self.state.active_folder, capture_output=True, text=True, check=True
+                cwd=self.state.active_folder, capture_output=True, text=True, check=True, encoding="utf-8", errors="replace"
             )
             res_cached = subprocess.run(
                 ["git", "diff", "--cached", rel_path],
-                cwd=self.state.active_folder, capture_output=True, text=True, check=True
+                cwd=self.state.active_folder, capture_output=True, text=True, check=True, encoding="utf-8", errors="replace"
             )
             diff = res.stdout + "\n" + res_cached.stdout
             return diff.strip() if diff.strip() else "[No unstaged/staged git modifications in this file]"
@@ -1203,8 +1382,13 @@ class ProjectContextCopierApp:
             else:
                 self.preview.code_view.insert(tk.END, part, "normal")
 
-    def render_rich_markdown(self, markdown_text):
+    def render_rich_markdown(self, markdown_text, preserve_scroll=False):
         """Parses markdown block elements (headers, quotes, bullets, code blocks) and renders in code preview."""
+        yview = None
+        if preserve_scroll:
+            yview = self.preview.code_view.yview()
+        elif getattr(self.state, 'selected_preview_file', None) and getattr(self.cache, 'file_scroll_states', {}).get(self.state.selected_preview_file):
+            yview = self.cache.file_scroll_states[self.state.selected_preview_file]
         self.preview.code_view.config(state="normal")
         self.preview.code_view.delete("1.0", tk.END)
 
@@ -1262,6 +1446,9 @@ class ProjectContextCopierApp:
                     self.insert_styled_text(line + "\n")
 
         self.preview.code_view.config(state="disabled")
+        if yview:
+            self.preview.code_view.update_idletasks()
+            self.preview.code_view.yview_moveto(yview[0])
 
     def on_tree_single_click(self, event):
         """Toggles checkbox on click, and displays text content on the Right Explorer panel."""
@@ -1269,26 +1456,51 @@ class ProjectContextCopierApp:
             self.sidebar.tree.tag_remove(tk.SEL, "1.0", tk.END)
             index = self.sidebar.tree.index(f"@{event.x},{event.y}")
             line_num = int(index.split('.')[0])
+            col_num = int(index.split('.')[1])
             
             if not hasattr(self.cache, 'tree_line_mapping') or line_num not in self.cache.tree_line_mapping:
                 return "break"
                 
             node_type, data = self.cache.tree_line_mapping[line_num]
+            line_text = self.sidebar.tree.get(f"{line_num}.0", f"{line_num}.end")
             
+            checkbox_start = -1
+            checkbox_len = 2
+            if '☑ ' in line_text:
+                checkbox_start = line_text.index('☑ ')
+            elif '☐ ' in line_text:
+                checkbox_start = line_text.index('☐ ')
+            elif '[-] ' in line_text:
+                checkbox_start = line_text.index('[-] ')
+                checkbox_len = 4
+                
+            clicked_checkbox = False
+            if checkbox_start != -1 and col_num >= checkbox_start and col_num < checkbox_start + checkbox_len:
+                clicked_checkbox = True
+
             if node_type == "file":
                 target_path = data
-                if target_path in self.state.unchecked_files:
-                    self.state.unchecked_files.remove(target_path)
+                if clicked_checkbox:
+                    if target_path in self.state.unchecked_files:
+                        self.state.unchecked_files.remove(target_path)
+                    else:
+                        self.state.unchecked_files.add(target_path)
+                        
+                    self.render_tree_view()
+                    self.calculate_stats()
+                    self.refresh_pills()
+                    self.play_sound("click")
                 else:
-                    self.state.unchecked_files.add(target_path)
+                    self.play_sound("click")
                     
-                self.render_tree_view()
-                self.calculate_stats()
-                self.refresh_pills()
-
-                self.play_sound("click")
-                self.state.selected_preview_file = target_path
-                self.load_active_file_preview()
+                    if getattr(self.state, 'selected_preview_file', None) and hasattr(self, 'preview'):
+                        if not hasattr(self.cache, 'file_scroll_states'):
+                            self.cache.file_scroll_states = {}
+                        self.cache.file_scroll_states[self.state.selected_preview_file] = self.preview.code_view.yview()
+                        
+                    self.state.selected_preview_file = target_path
+                    self.render_tree_view()
+                    self.load_active_file_preview()
                 
             elif node_type == "folder":
                 sub_files = data
@@ -1313,6 +1525,7 @@ class ProjectContextCopierApp:
 
     # --- INTERACTIVE HOVER CARD TOOLTIPS ---
     def hide_tree_tooltip(self, event=None):
+        self.cache.tooltip_last_line = None
         if self.ui.win_tooltip:
             self.ui.win_tooltip.destroy()
             self.ui.win_tooltip = None
@@ -1323,26 +1536,53 @@ class ProjectContextCopierApp:
             index = self.sidebar.tree.index(f"@{event.x},{event.y}")
             line_num = int(index.split('.')[0])
             
+            try:
+                self.sidebar.tree.tag_remove("hover", "1.0", tk.END)
+                self.sidebar.tree.tag_add("hover", f"{line_num}.0", f"{line_num}.end + 1c")
+            except Exception:
+                pass
+            
+            if getattr(self.cache, 'tooltip_last_line', None) == line_num and getattr(self.ui, 'win_tooltip', None) and self.ui.win_tooltip.winfo_exists():
+                x = self.root.winfo_pointerx() + 15
+                y = self.root.winfo_pointery() + 10
+                self.ui.win_tooltip.wm_geometry(f"+{x}+{y}")
+                return
+                
+            self.cache.tooltip_last_line = line_num
+            
             if not hasattr(self.cache, 'tree_line_mapping') or line_num not in self.cache.tree_line_mapping:
-                if self.ui.win_tooltip:
+                self.cache.tooltip_last_line = None
+                if getattr(self.ui, 'win_tooltip', None):
                     self.ui.win_tooltip.destroy()
                     self.ui.win_tooltip = None
                 return
                 
             node_type, data = self.cache.tree_line_mapping[line_num]
             
-            size = 0
             if node_type == "file":
-                if os.path.exists(data):
-                    size = os.path.getsize(data) / 1024
-                clean_name = os.path.basename(data)
+                if data in self.cache.stats_cache:
+                    stats = self.cache.stats_cache[data]
+                    kb_val = stats["size"] / 1024
+                    raw_c = stats["raw_chars"]
+                    tokens = raw_c / 4
+                    lines = stats.get("lines")
+                    
+                    if lines is None:
+                        try:
+                            with open(data, 'r', encoding='utf-8', errors='replace') as f:
+                                lines = sum(1 for _ in f)
+                        except Exception:
+                            lines = 0
+                        stats["lines"] = lines
+                        
+                    tokens_str = f"{int(tokens)}" if tokens < 1000 else f"{tokens/1000:.1f}k"
+                    tt_text = f"{os.path.basename(data)}\nSize: {kb_val:.1f} KB\nLines: {lines:,}\n≈ {tokens_str} tokens"
+                else:
+                    tt_text = f"{os.path.basename(data)}\nSize: Unknown"
             else:
-                for fp in data:
-                    if os.path.exists(fp):
-                        size += os.path.getsize(fp) / 1024
                 line_content = self.sidebar.tree.get(f"{line_num}.0", f"{line_num}.end")
                 clean_name = line_content.replace("└── ", "").replace("├── ", "").replace("│   ", "").replace("☑ ", "").replace("☐ ", "").replace("[-] ", "").strip()
-                clean_name = f"{clean_name} (Folder)"
+                tt_text = f"{clean_name} (Folder)"
 
             if self.ui.win_tooltip:
                 self.ui.win_tooltip.destroy()
@@ -1355,13 +1595,89 @@ class ProjectContextCopierApp:
             self.ui.win_tooltip.wm_geometry(f"+{x}+{y}")
             
             t = THEMES[self.state.current_theme]
-            lbl = tk.Label(self.ui.win_tooltip, text=f"File: {clean_name}\nSize: {size:.2f} KB", bg=t["entry_bg"], fg=t["text_primary"],
+            lbl = tk.Label(self.ui.win_tooltip, text=tt_text, bg=t["entry_bg"], fg=t["text_primary"], justify=tk.LEFT,
                            highlightbackground=t["entry_border"], highlightthickness=1, font=("Segoe UI", 8), padx=5, pady=3)
             lbl.pack()
         except Exception:
             if self.ui.win_tooltip:
                 self.ui.win_tooltip.destroy()
                 self.ui.win_tooltip = None
+
+    def show_tree_context_menu(self, event):
+        try:
+            index = self.sidebar.tree.index(f"@{event.x},{event.y}")
+            line_num = int(index.split('.')[0])
+            
+            if not hasattr(self.cache, 'tree_line_mapping') or line_num not in self.cache.tree_line_mapping:
+                return
+                
+            node_type, data = self.cache.tree_line_mapping[line_num]
+            if node_type == "file":
+                self.sidebar.tree.tag_remove(tk.SEL, "1.0", tk.END)
+                self.sidebar.tree.tag_add(tk.SEL, f"{line_num}.0", f"{line_num}.end")
+                
+                menu = tk.Menu(self.root, tearoff=0)
+                
+                menu.add_command(label="Copy File (Normal)", command=lambda: self.copy_single_file(data, "Normal"))
+                menu.add_command(label="Copy File (Compact Context)", command=lambda: self.copy_single_file(data, "Compact Context"))
+                menu.add_command(label="Copy Code Structure", command=lambda: self.copy_single_file(data, "Code Structure"))
+                menu.add_separator()
+                menu.add_command(label="Copy Relative Path", command=lambda: self.copy_relative_path(data))
+                menu.add_command(label="Open in Explorer", command=lambda: self.open_in_explorer(data))
+                
+                # Setup colors
+                t = THEMES[self.state.current_theme]
+                menu.config(bg=t["card_bg"], fg=t["text_primary"], activebackground=t["accent"], activeforeground="#11111b" if self.state.current_theme == "dark" else t["bg"])
+                
+                menu.post(event.x_root, event.y_root)
+        except Exception:
+            pass
+
+    def copy_single_file(self, filepath, mode):
+        try:
+            content = read_file(filepath)
+            if mode == "Compact Context":
+                content = compress_comments_whitespace(content, filepath)
+            elif mode == "Code Structure":
+                content = generate_skeleton(content, filepath)
+                
+            if self.state.active_folder:
+                rel_path = os.path.relpath(filepath, self.state.active_folder)
+            else:
+                rel_path = os.path.basename(filepath)
+            
+            final_text = f"File: {rel_path}\n"
+            final_text += "=" * 40 + "\n"
+            final_text += f"```{os.path.splitext(filepath)[1].strip('.')}\n"
+            final_text += content
+            if not content.endswith("\n"):
+                final_text += "\n"
+            final_text += "```\n"
+            
+            copy_to_clipboard(final_text)
+            self.show_toast(f"Copied {os.path.basename(filepath)} ({mode})", "success")
+            self.play_sound("success")
+        except Exception as e:
+            self.show_toast(f"Error copying: {str(e)}", "error")
+            self.play_sound("error")
+            
+    def copy_relative_path(self, filepath):
+        try:
+            if self.state.active_folder:
+                rel_path = os.path.relpath(filepath, self.state.active_folder)
+            else:
+                rel_path = os.path.basename(filepath)
+            copy_to_clipboard(rel_path)
+            self.show_toast("Relative path copied!", "success")
+            self.play_sound("success")
+        except Exception:
+            pass
+            
+    def open_in_explorer(self, filepath):
+        try:
+            subprocess.run(['explorer', '/select,', os.path.normpath(filepath)])
+        except Exception:
+            pass
 
     # --- STATISTICS & TOKEN HEURISTICS COUNTER ---
     def calculate_stats(self):
@@ -1417,10 +1733,25 @@ class ProjectContextCopierApp:
                     kb_val = sz / 1024
                     limit = self.config.get("large_file_threshold_kb", 200)
                     if kb_val > limit:
+                        def clear_warning():
+                            if getattr(self.state, "warning_timer", None) is not None:
+                                if self.status.label.cget("text").startswith("⚠️"):
+                                    self.status.label.config(
+                                        text="Status: Ready",
+                                        fg=THEMES[self.state.current_theme].get("text_secondary", "#a6adc8")
+                                    )
+                                self.state.warning_timer = None
+                                if hasattr(self, 'update_status_color'):
+                                    self.update_status_color()
+                                    
+                        if getattr(self.state, "warning_timer", None) is not None:
+                            self.root.after_cancel(self.state.warning_timer)
+                            
                         self.status.label.config(
                             text=f"⚠️ Warning: File '{os.path.basename(fp)}' is very large ({kb_val:.1f} KB)",
                             fg=THEMES[self.state.current_theme]["lbl_status_error"]
                         )
+                        self.state.warning_timer = self.root.after(4000, clear_warning)
             except Exception:
                 pass
 
@@ -1443,8 +1774,122 @@ class ProjectContextCopierApp:
         tokens_mode2 = mode2_chars // 4
         
         self.status.stats_label.config(
-            text=f"{total_files} file(s) loaded ({ext_summary}) | Size: {kb_size:.1f} KB | Est. Tokens: {tokens_raw:,} (Stripped: {tokens_mode1:,} | Skeleton: {tokens_mode2:,})"
+            text=f"{total_files} file(s) loaded ({ext_summary}) | Size: {kb_size:.1f} KB | Est. Tokens: {tokens_raw:,} (Compact: {tokens_mode1:,} | Structure: {tokens_mode2:,})"
         )
+        
+        self.update_copy_mode_sizes()
+
+    def update_copy_mode_sizes(self):
+        if not hasattr(self, 'toolbar'): return
+        
+        if hasattr(self.cache, 'mode_size_timer') and self.cache.mode_size_timer:
+            self.root.after_cancel(self.cache.mode_size_timer)
+            
+        def _trigger():
+            snapshot = {
+                "redact": self.settings.ent_redact.get(),
+                "active_folder": self.state.active_folder,
+                "active_files": list(self.state.active_files),
+                "unchecked_files": set(self.state.unchecked_files),
+            }
+            import threading
+            threading.Thread(target=self._calc_mode_sizes, args=(snapshot,), daemon=True).start()
+            
+        self.cache.mode_size_timer = self.root.after(300, _trigger)
+        
+    def _calc_mode_sizes(self, snapshot=None):
+        modes = ["Normal", "Compact Context", "Code Structure", "Mermaid Graph", "Git Diff"]
+        sizes = {}
+        tokens = {}
+        for m in modes:
+            try:
+                data = self.get_bundled_data_by_mode(m, snapshot=snapshot)
+                sz = len(data.encode('utf-8')) if data else 0
+                tks = len(data) // 4 if data else 0
+                tokens[m] = tks
+                
+                if sz < 1024:
+                    sizes[m] = f"{sz} B"
+                else:
+                    sizes[m] = f"{sz/1024:.1f} KB"
+            except Exception:
+                sizes[m] = "0 B"
+                tokens[m] = 0
+                
+        normal_tks = tokens.get("Normal", 0)
+        descriptions = {}
+        for m in modes:
+            base_desc = {
+                "Normal": "Copies complete file contents.",
+                "Compact Context": "Removes comments and extra whitespace.",
+                "Code Structure": "Only classes, methods and signatures.",
+                "Mermaid Graph": "Generates a flowchart of function calls.",
+                "Git Diff": "Copies only changed code."
+            }.get(m, "")
+            
+            tks = tokens.get(m, 0)
+            if tks >= 1000:
+                tk_str = f"≈ {tks/1000:.0f}k tokens"
+            else:
+                tk_str = f"≈ {tks} tokens"
+                
+            savings = ""
+            if m != "Normal" and normal_tks > 0 and tks < normal_tks:
+                pct = int((1.0 - (tks / normal_tks)) * 100)
+                savings = f" ↓{pct}%"
+                
+            descriptions[m] = f"{m} ({tk_str}{savings}): {base_desc}"
+                
+        self.root.after(0, lambda: self._apply_mode_sizes(sizes, descriptions))
+        
+    def _apply_mode_sizes(self, sizes, descriptions=None):
+        if not hasattr(self, 'toolbar'): return
+        
+        import re
+        import tkinter as tk
+        
+        current = self.toolbar.var_copy_mode.get()
+        base_current = re.sub(r'\s*\(~.*?\)$', '', current).strip()
+        # Also strip disabled tag if present
+        base_current = base_current.replace(' (disabled)', '').strip()
+        
+        is_git = bool(self.state.active_folder and os.path.exists(os.path.join(self.state.active_folder, ".git")))
+        
+        if base_current == "Git Diff" and not is_git:
+            base_current = "Normal"
+            self.toolbar.var_copy_mode.set(base_current)
+            
+        new_selected = None
+        new_values = []
+        
+        for base_mode, size_str in sizes.items():
+            display_str = f"{base_mode} (~{size_str})"
+            if base_mode == "Git Diff" and not is_git:
+                display_str += " (disabled)"
+                
+            new_values.append(display_str)
+            if base_mode == base_current:
+                new_selected = display_str
+                
+        from tkinter import ttk
+        if isinstance(self.toolbar.copy_mode_dropdown, ttk.Combobox):
+            self.toolbar.copy_mode_dropdown["values"] = new_values
+        else:
+            menu = self.toolbar.copy_mode_dropdown["menu"]
+            menu.delete(0, "end")
+            for val in new_values:
+                state = "disabled" if "(disabled)" in val else "normal"
+                menu.add_command(label=val, command=tk._setit(self.toolbar.var_copy_mode, val), state=state)
+                
+        if new_selected:
+            self.toolbar.var_copy_mode.set(new_selected)
+            
+        if descriptions:
+            self.cache.mode_descriptions = descriptions
+            # Force update of the label immediately
+            self.toolbar.lbl_mode_desc.config(text=descriptions.get(base_current, ""))
+                
+
 
     def on_drop(self, event):
         paths = self.root.tk.splitlist(event.data)
@@ -1501,6 +1946,14 @@ class ProjectContextCopierApp:
         )
         self.refresh_filter()
         self.show_toast("Successfully loaded folder!", "success")
+        
+        if not self.state.toast_active:
+            self.status.label.config(
+                text=f"Ready • {len(self.state.active_files)} files • {len(self.state.unchecked_files)} excluded • {os.path.getsize(folder_path)/1024:.1f} KB", 
+                fg=THEMES[self.state.current_theme]["lbl_status_ready"]
+            )
+            
+        self.update_copy_mode_sizes()
 
     def load_files(self):
         extensions, _, _ = self.get_parsed_settings()
@@ -1536,13 +1989,21 @@ class ProjectContextCopierApp:
     def copy_filtered_selection(self):
         self.copy_with_compression(getattr(self.toolbar, 'var_copy_mode', tk.StringVar(value="None")).get())
 
-    def get_bundled_data_by_mode(self, mode):
+    def get_bundled_data_by_mode(self, mode, snapshot=None):
         """Bundles contents of all active files and applies redaction/compression filters by mode."""
-        checked_files = [f for f in self.state.active_files if f not in self.state.unchecked_files]
+        import re
+        mode = re.sub(r'\s*\(~.*?\)$', '', mode).strip()
+        
+        active_files = snapshot["active_files"] if snapshot else self.state.active_files
+        unchecked_files = snapshot["unchecked_files"] if snapshot else self.state.unchecked_files
+        active_folder = snapshot["active_folder"] if snapshot else self.state.active_folder
+        redact_keys_str = snapshot["redact"] if snapshot else self.settings.ent_redact.get()
+
+        checked_files = [f for f in active_files if f not in unchecked_files]
         if not checked_files:
             return ""
 
-        redact_keys = [k.strip() for k in self.settings.ent_redact.get().split(",") if k.strip()]
+        redact_keys = [k.strip() for k in redact_keys_str.split(",") if k.strip()]
         output_text = ""
         
         # Mode: Mermaid Graph
@@ -1550,23 +2011,33 @@ class ProjectContextCopierApp:
             call_graph = generate_project_mermaid_graph(checked_files)
             return f"=== PROJECT FUNCTION CALL GRAPH ===\n{call_graph}\n\n"
 
-        # Mode: Skeleton
-        if mode == "Skeleton":
+        # Mode: Code Structure
+        if mode == "Code Structure":
             call_graph = generate_project_mermaid_graph(checked_files)
             output_text += f"=== PROJECT FUNCTION CALL GRAPH ===\n{call_graph}\n\n"
             
         # Mode: Git Diff
         if mode == "Git Diff":
-            diff = get_git_diff(self.state.active_folder)
-            return diff if diff else "[No git changes found in repository]"
+            diff = get_git_diff(active_folder)
+            return diff if diff and diff.strip() else "✓ No staged or unstaged changes."
 
         for fp in checked_files:
-            if self.state.active_folder:
-                rel_path = os.path.relpath(fp, self.state.active_folder)
-                folder_name = os.path.basename(self.state.active_folder)
+            if active_folder:
+                rel_path = os.path.relpath(fp, active_folder)
+                folder_name = os.path.basename(active_folder)
                 label = os.path.join(folder_name, rel_path)
             else:
                 label = os.path.basename(fp)
+
+            try:
+                sz_kb = os.path.getsize(fp) / 1024
+                limit = self.config.get("large_file_threshold_kb", 200)
+                if sz_kb > limit:
+                    sz_str = f"{sz_kb/1024:.1f} MB" if sz_kb >= 1024 else f"{sz_kb:.1f} KB"
+                    output_text += f"--- {label} ---\n⚠ {os.path.basename(fp)} skipped ({sz_str} > {limit} KB)\n\n"
+                    continue
+            except Exception:
+                pass
 
             content = read_file(fp)
             
@@ -1575,9 +2046,9 @@ class ProjectContextCopierApp:
                 content = content.replace(secret, "[REDACTED]")
 
             # Apply Compression Modes
-            if mode == "Strip Comments":
+            if mode == "Compact Context":
                 content = compress_comments_whitespace(content, fp)
-            elif mode == "Skeleton":
+            elif mode == "Code Structure":
                 content = generate_skeleton(content, fp)
 
             output_text += f"--- {label} ---\n{content}\n\n"
@@ -1589,7 +2060,7 @@ class ProjectContextCopierApp:
         raw_text = self.get_bundled_data_by_mode("Normal")
         comp_text = self.get_bundled_data_by_mode(mode)
         
-        if not comp_text or comp_text.startswith("[No git"):
+        if not comp_text or comp_text.startswith("[No git") or comp_text.startswith("[Not a Git") or comp_text.startswith("[Error running git"):
             self.status.label.config(text="Status: No active files/changes to copy", fg=THEMES[self.state.current_theme]["lbl_status_error"])
             self.play_sound("error")
             return
@@ -1615,7 +2086,48 @@ class ProjectContextCopierApp:
                 self.status.label.config(text=msg, fg=THEMES[self.state.current_theme]["lbl_status_success"])
         else:
             self.play_sound("error")
+            self.show_toast("Error: Could not copy to clipboard", "error")
             self.status.label.config(text="✗ Failed to copy contents to clipboard", fg=THEMES[self.state.current_theme]["lbl_status_error"])
+            
+    def export_bundle_to_file(self, file_type):
+        from tkinter import filedialog
+        
+        mode = self.toolbar.var_copy_mode.get() if hasattr(self, 'toolbar') else self.ui.var_copy_mode.get()
+        comp_text = self.get_bundled_data_by_mode(mode)
+        
+        if not comp_text or comp_text.startswith("[No git"):
+            self.status.label.config(text="Status: No active files/changes to export", fg=THEMES[self.state.current_theme]["lbl_status_error"])
+            self.play_sound("error")
+            return
+            
+        ext = ".md" if file_type == "markdown" else ".txt"
+        filetypes = [("Markdown files", "*.md"), ("All files", "*.*")] if file_type == "markdown" else [("Text files", "*.txt"), ("All files", "*.*")]
+        
+        filepath = filedialog.asksaveasfilename(
+            title="Export Bundle",
+            defaultextension=ext,
+            filetypes=filetypes,
+            initialfile=f"context_bundle{ext}"
+        )
+        
+        if not filepath:
+            return
+            
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(comp_text)
+            
+            # Calculate tokens
+            comp_tokens = len(comp_text) // 4
+            
+            self.play_sound("success")
+            msg = f"✓ Exported {len(self.state.active_files)} file(s)! ({comp_tokens:,} tokens | {len(comp_text)/1024:.1f} KB)"
+            self.show_toast(f"Exported to {os.path.basename(filepath)}", "success")
+            self.status.label.config(text=msg, fg=THEMES[self.state.current_theme]["lbl_status_success"])
+        except Exception as e:
+            self.play_sound("error")
+            self.show_toast(f"Error exporting: {e}", "error")
+            self.status.label.config(text="✗ Failed to export file", fg=THEMES[self.state.current_theme]["lbl_status_error"])
 
     def reset_defaults(self):
         self.play_sound("click")
@@ -1633,10 +2145,12 @@ class ProjectContextCopierApp:
 
         self.settings.var_use_regex.set(DEFAULT_CONFIG["use_regex"])
         self.settings.var_parse_gitignore.set(DEFAULT_CONFIG["parse_gitignore"])
-        self.ui.var_git_diff_only.set(DEFAULT_CONFIG["git_diff_only"])
+        if hasattr(self.settings, "var_watch_live"):
+            self.settings.var_watch_live.set(True)
         self.settings.var_sound.set(DEFAULT_CONFIG["sound_enabled"])
 
         self.config.update(DEFAULT_CONFIG.copy())
+        self.config["watch_live_updates"] = True
         self.config["theme"] = self.state.current_theme
         save_config(self.config)
 
